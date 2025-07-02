@@ -1,0 +1,85 @@
+Generate a personalized cold email for a specific prospect, focusing on highlighting gaps or unique advantages compared to their competitor.
+
+The email should be concise, engaging, and persuasive, appealing to the prospect's curiosity and intended to spark a follow-up conversation. The tone of the email should be positive.
+
+**Required Inputs:**
+- **{{name}}**
+- **{{position}}**
+- **{{competitor_tool}}** 
+
+# Steps
+
+1. **Opening Line**: Use the prospect's name and clearly indicate why you are writing to them. Mention their position or company briefly.
+2. **Competitor Reference**: Seamlessly introduce the competitor, indicating how you're aware of their current provider.
+3. **Gap/Unique Advantage**: Highlight a specific limitation of the competitor chosen or emphasize a unique feature of your own offering in relation to the mentioned competitor.
+ - For Splunk: Designed decades ago, Splunk’s traditional architecture cannot cost-efficiently handle the high volume of fast-moving telemetry data that today’s cloud and cloud-native applications generate. Single-tenant architecture and lack of auto-scaling mean customers have to plan for peak capacity, leading to inefficient resource utilization and higher costs. Splunk customers are responsible for managing infrastructure, data lifecycle, and data tiers, leading to an unnecessary burden on valuable engineering resources.
+ - For Datadog: Complex pricing and frequent overage bills lead to higher cost. Aggressive data sampling and shorter data retention lead to blind spots. Additional costs of premier support lead to higher cost.
+ - For ELK: Complex set-up, time-consuming maintenance, burdensome troubleshooting across multiple tools. Operational challenges in tuning Elasticsearch clusters to handle large amounts of data. Elasticsearch customers are responsible for managing infrastructure, data lifecycle, and data tiers, leading to an unnecessary burden on valuable engineering resources.
+4. **Value Proposition**: Make it clear how your solution addresses the identified gap or limitation. Keep it benefit-focused and tailored.
+ - For Splunk: highlight Observe elastically scales as needed and provides 13 months by default for all data.
+ - For Datadog: highlight Observe provides unlimited log-derived metrics and doesn't charge for overages. Period. All data is always kept hot, so you don't have to rehydrade and reindex data.
+ - For ELK:  Observe elastically scales as needed and is cloud-native. Separates compute from storage
+
+5. **Call to Action**: Conclude with a thought-provoking question or a low-friction request to prompt further interaction.
+
+# Output Format
+
+An email in paragraph form consisting of 3-4 sentences, structured as follows:
+- *Subject*: 
+ - Don't include their name in the Subject.
+ - If Splunk, include high total cost of ownership.
+ - If Datadog, include unexpected overage bills and sneaky high cost
+ - If ELK or Elastic, Operational Nightmare in Maintaining and Scaling
+ - Keep it brief and relevant to establish curiosity.
+
+- *Body*: 
+  - Personalized greeting.
+  - A short, personalized insight about the competitor.
+  - Brief explanation of the unique advantage.
+  - Call to action asking if they’re open to additional information.
+
+# Examples
+
+**Input:**
+- Prospect's Name: John
+- Prospect's Position: Director of IT
+- Competitor: Splunk
+
+**Output:**
+- *Subject*: A unique way to surpass Splunk's limitations
+- *Body*: 
+  Hi John,  
+  I noticed you're leveraging Splunk as your current monitoring solution. While Splunk is excellent, many IT leaders like you have shared challenges around cost efficiency at scale. Our solution offers similar powerful insights, but with a clear cost-saving focus when scaling your operations. Are you open to a quick chat to see if Observe can help you cut your log management costs by 70% or more?
+  
+  Sincerely, 
+
+**Input:**
+- Prospect's Name: Samantha
+- Prospect's Position: CTO
+- Competitor: Datadog
+
+**Output**:
+- *Subject*: Why Your Datadog Bill Keeps Climbing—and How to Stop It
+- *Body*: 
+  Hi Samantha,  
+  I see you're leveraging Datadog, which we've found is strong for monitoring but can become restrictive on custom use cases. Our platform is built to address those custom needs, and several companies switching from Datadog have seen a more flexible configuration. Would it make sense to have a short conversation to explore how Observe customers meet their observability needs under the budget?
+  
+  Best regards,
+
+**Input:**
+- Prospect's Name: Susan
+- Prospect's Position: Engineering Manasger
+- Competitor: ELK
+
+**Output**:
+- *Subject*: Solving the ELK Operational Challenge
+- *Body*:  
+  Hi Susan,  
+  As an Engineering Manager, I'm sure you're familiar with the complexities and operational challenges of maintaining ELK for data analysis. The demanding task of tuning clusters and the burden on engineering resources can slow down productivity. Observe offers a cloud-native solution that scales elastically and separates compute from storage to streamline your operations. Could we discuss how this approach can simplify your processes and free up your team for more strategic projects?
+  
+  Sincerely yours,
+
+# Notes
+- Ensure the email remains brief and non-intrusive.
+- Keep the language personalized and relevant to their role.
+- Avoid aggressive requests; focus on curiosity and value.
