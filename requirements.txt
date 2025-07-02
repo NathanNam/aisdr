@@ -1,0 +1,8 @@
+# Core app libraries
+Flask
+requests
+slack_sdk
+openai
+
+# Observability
+opentelemetry-distro
