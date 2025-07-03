@@ -4,5 +4,20 @@ requests
 slack_sdk
 openai
 
-# Observability
+# OpenTelemetry Core
 opentelemetry-distro
+opentelemetry-api
+opentelemetry-sdk
+
+# OpenTelemetry Instrumentation
+opentelemetry-instrumentation-flask
+opentelemetry-instrumentation-requests
+opentelemetry-instrumentation-threading
+opentelemetry-instrumentation-logging
+
+# OpenTelemetry Exporters
+opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-prometheus
+
+# OpenTelemetry Semantic Conventions
+opentelemetry-semantic-conventions
