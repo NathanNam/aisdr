@@ -16,7 +16,7 @@ opentelemetry-instrumentation-threading
 opentelemetry-instrumentation-logging
 
 # OpenTelemetry Exporters
-opentelemetry.exporter
+opentelemetry-exporter
 opentelemetry-exporter-otlp-proto-http
 opentelemetry-exporter-prometheus
 
