@@ -1,24 +1,21 @@
-# Core app libraries
+# ───── Core app ─────
 Flask
 requests
 slack_sdk
 openai
 
-# OpenTelemetry Core
-opentelemetry-distro
-opentelemetry-api
-opentelemetry-sdk
+# ───── OpenTelemetry core (meta-package pulls api + sdk) ─────
+opentelemetry-distro==1.34.1
 
-# OpenTelemetry Instrumentation
-opentelemetry-instrumentation-flask
-opentelemetry-instrumentation-requests
-opentelemetry-instrumentation-threading
-opentelemetry-instrumentation-logging
+# ───── Explicit exporters ─────
+opentelemetry-exporter-otlp-proto-http==1.34.1
+opentelemetry-exporter-prometheus==1.34.1
 
-# OpenTelemetry Exporters
-opentelemetry-exporter
-opentelemetry-exporter-otlp-proto-http
-opentelemetry-exporter-prometheus
+# ───── Instrumentations that aren’t bundled in the distro ─────
+opentelemetry-instrumentation-flask==0.55b1
+opentelemetry-instrumentation-requests==0.55b1
+opentelemetry-instrumentation-threading==0.55b1
+opentelemetry-instrumentation-logging==0.55b1
 
-# OpenTelemetry Semantic Conventions
+# (semantic-conventions is pulled in automatically by the meta-package)
 opentelemetry-semantic-conventions
