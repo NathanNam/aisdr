@@ -16,6 +16,8 @@ Install the Python dependencies listed in `requirements.txt`:
 pip install -r requirements.txt
 ```
 
+This installs the OTLP HTTP exporter required for tracing. If the package is missing, you'll see errors like `ModuleNotFoundError: No module named 'opentelemetry.exporter'`.
+
 Key libraries include Flask, requests, slack_sdk, openai and comprehensive OpenTelemetry instrumentation.
 
 ## Configuration
@@ -42,6 +44,8 @@ export OTEL_SERVICE_VERSION=1.0.0
 export OTEL_ENVIRONMENT=production
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.observe.inc/v1/otel
 export OTEL_EXPORTER_OTLP_HEADERS='{"Authorization":"Bearer <YOUR_INGEST_TOKEN>","x-observe-target-package":"Tracing"}'
+export OTEL_TRACES_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
 # For Observe.inc integration
 export OBSERVE_INGEST_TOKEN=<your_observe_ingest_token>
