@@ -52,7 +52,12 @@ def test_otel_setup():
 def test_environment():
     """Test environment variable configuration."""
     required_vars = ["SLACK_BOT_TOKEN", "OPENAI_API_KEY"]
-    optional_vars = ["OBSERVE_INGEST_TOKEN", "OTEL_SERVICE_NAME", "OTEL_ENVIRONMENT"]
+    optional_vars = [
+        "OBSERVE_INGEST_TOKEN",
+        "OTEL_SERVICE_NAME",
+        "OTEL_ENVIRONMENT",
+        "OTEL_EXPORTER_OTLP_HEADERS",
+    ]
     
     print("\n🔧 Environment Variables:")
     for var in required_vars:

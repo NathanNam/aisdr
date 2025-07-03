@@ -6,6 +6,7 @@ It configures tracing, metrics, and logging with minimal code changes to the mai
 """
 
 import os
+import json
 import logging
 from typing import Optional
 
@@ -51,12 +52,20 @@ def setup_tracing() -> trace.Tracer:
     
     # Configure OTLP exporter
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
-    otlp_headers = {}
+    headers_json = os.getenv(
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        '{"Authorization":"Bearer <YOUR_INGEST_TOKEN>","x-observe-target-package":"Tracing"}'
+    )
+    try:
+        otlp_headers = json.loads(headers_json)
+    except json.JSONDecodeError as e:
+        logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
+        otlp_headers = {}
     
     # Use Observe token if available
     observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
     if observe_token:
-        otlp_headers["authorization"] = f"Bearer {observe_token}"
+        otlp_headers["Authorization"] = f"Bearer {observe_token}"
     
     # Set up OTLP span exporter
     otlp_exporter = OTLPSpanExporter(
@@ -85,12 +94,20 @@ def setup_metrics() -> metrics.Meter:
     
     # OTLP reader for remote metrics
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
-    otlp_headers = {}
+    headers_json = os.getenv(
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        '{"Authorization":"Bearer <YOUR_INGEST_TOKEN>","x-observe-target-package":"Tracing"}'
+    )
+    try:
+        otlp_headers = json.loads(headers_json)
+    except json.JSONDecodeError as e:
+        logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
+        otlp_headers = {}
     
     # Use Observe token if available
     observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
     if observe_token:
-        otlp_headers["authorization"] = f"Bearer {observe_token}"
+        otlp_headers["Authorization"] = f"Bearer {observe_token}"
     
     otlp_metric_exporter = OTLPMetricExporter(
         endpoint=f"{otlp_endpoint}/metrics",
