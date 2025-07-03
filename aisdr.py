@@ -1,7 +1,11 @@
 import os
+import logging
 from flask import Flask, request, jsonify
 import requests
 import threading
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -114,9 +118,11 @@ def process_user_input(user_message):
         ],
     }
 
-    response = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
+    response = requests.post(
+        "https://api.openai.com/v1/chat/completions", json=payload, headers=headers
+    )
     response_data = response.json()
-    print("OpenAI API response:", response_data)
+    logger.debug("OpenAI API response: %s", response_data)
 
     if "error" in response_data:
         return "Sorry, I couldn't process your request at the moment."
@@ -129,8 +135,10 @@ def process_user_input(user_message):
 def send_message_to_slack(channel, text):
     headers = {"Authorization": f"Bearer {SLACK_BOT_TOKEN}", "Content-Type": "application/json"}
     payload = {"channel": channel, "text": text}
-    resp = requests.post("https://slack.com/api/chat.postMessage", headers=headers, json=payload)
-    print("Slack message response:", resp.json())
+    resp = requests.post(
+        "https://slack.com/api/chat.postMessage", headers=headers, json=payload
+    )
+    logger.debug("Slack message response: %s", resp.json())
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
