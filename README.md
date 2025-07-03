@@ -58,3 +58,13 @@ The bot will reply in the originating channel with the generated email once Open
 
 Edit `aisdr_system_prompt.txt` to adjust the tone, style or competitor references used when generating emails.
 
+## Testing
+
+Before running any tests make sure the required Python dependencies are installed:
+
+```bash
+pip install -r requirements.txt
+```
+
+This ensures your environment contains the libraries needed for the test suite.
+
