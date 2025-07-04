@@ -290,5 +290,5 @@ def send_message_to_slack(channel, text):
 
 if __name__ == "__main__":
     logger.info("Starting AISDR Flask application with OpenTelemetry instrumentation")
-    logger.info(f"OpenTelemetry configuration: endpoint={os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'https://api.observe.inc/v1/otel')}")
+    logger.info(f"OpenTelemetry configuration: endpoint={os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'https://api.observe.inc/v2/otel')}")
     app.run(host="0.0.0.0", port=8080)

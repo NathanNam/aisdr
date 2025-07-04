@@ -42,7 +42,7 @@ export OPENAI_API_KEY=<your_openai_api_key>
 export OTEL_SERVICE_NAME=aisdr-bot
 export OTEL_SERVICE_VERSION=1.0.0
 export OTEL_ENVIRONMENT=production
-export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.observe.inc/v1/otel
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.observe.inc/v2/otel
 export OTEL_EXPORTER_OTLP_HEADERS='{"Authorization":"Bearer <YOUR_INGEST_TOKEN>"}'
 # Or use the simplified variable
 export OTEL_EXPORTER_OTLP_AUTH_HEADER="Authorization=Bearer <YOUR_INGEST_TOKEN>"
