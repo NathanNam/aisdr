@@ -44,6 +44,8 @@ export OTEL_SERVICE_VERSION=1.0.0
 export OTEL_ENVIRONMENT=production
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.observe.inc/v1/otel
 export OTEL_EXPORTER_OTLP_HEADERS='{"Authorization":"Bearer <YOUR_INGEST_TOKEN>"}'
+# Or use the simplified variable
+export OTEL_EXPORTER_OTLP_AUTH_HEADER="Authorization=Bearer <YOUR_INGEST_TOKEN>"
 export OTEL_TRACES_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
@@ -58,8 +60,8 @@ signal:
 - Metrics: `Metrics`
 - Logs: `Host Explorer`
 
-So you only need to provide the `Authorization` token in
-`OTEL_EXPORTER_OTLP_HEADERS`.
+So you only need to provide the `Authorization` token using either
+`OTEL_EXPORTER_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_AUTH_HEADER`.
 ```
 
 Copy `.env.example` to `.env` and configure your values:
