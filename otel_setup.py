@@ -13,6 +13,7 @@ from typing import Optional
 from opentelemetry import trace, metrics
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -24,6 +25,9 @@ from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.threading import ThreadingInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.semconv.resource import ResourceAttributes
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs._internal.export import BatchLogRecordProcessor
+from opentelemetry._logs import set_logger_provider
 
 # Configure structured logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -44,6 +48,25 @@ def get_resource() -> Resource:
         "service.component": "slack-bot"
     })
 
+def get_otlp_headers(package: str) -> dict:
+    """Parse OTLP headers and ensure correct target package."""
+    headers_json = os.getenv(
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        '{"Authorization":"Bearer <YOUR_INGEST_TOKEN>"}'
+    )
+    try:
+        otlp_headers = json.loads(headers_json)
+    except json.JSONDecodeError as e:
+        logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
+        otlp_headers = {}
+
+    observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
+    if observe_token:
+        otlp_headers["Authorization"] = f"Bearer {observe_token}"
+
+    otlp_headers["x-observe-target-package"] = package
+    return otlp_headers
+
 def setup_tracing() -> trace.Tracer:
     """Configure OpenTelemetry tracing with OTLP export."""
     resource = get_resource()
@@ -53,20 +76,7 @@ def setup_tracing() -> trace.Tracer:
     
     # Configure OTLP exporter
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
-    headers_json = os.getenv(
-        "OTEL_EXPORTER_OTLP_HEADERS",
-        '{"Authorization":"Bearer <YOUR_INGEST_TOKEN>","x-observe-target-package":"Tracing"}'
-    )
-    try:
-        otlp_headers = json.loads(headers_json)
-    except json.JSONDecodeError as e:
-        logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
-        otlp_headers = {}
-    
-    # Use Observe token if available
-    observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
-    if observe_token:
-        otlp_headers["Authorization"] = f"Bearer {observe_token}"
+    otlp_headers = get_otlp_headers("Tracing")
     
     # Set up OTLP span exporter
     otlp_exporter = OTLPSpanExporter(
@@ -95,20 +105,7 @@ def setup_metrics() -> metrics.Meter:
     
     # OTLP reader for remote metrics
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
-    headers_json = os.getenv(
-        "OTEL_EXPORTER_OTLP_HEADERS",
-        '{"Authorization":"Bearer <YOUR_INGEST_TOKEN>","x-observe-target-package":"Tracing"}'
-    )
-    try:
-        otlp_headers = json.loads(headers_json)
-    except json.JSONDecodeError as e:
-        logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
-        otlp_headers = {}
-    
-    # Use Observe token if available
-    observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
-    if observe_token:
-        otlp_headers["Authorization"] = f"Bearer {observe_token}"
+    otlp_headers = get_otlp_headers("Metrics")
     
     otlp_metric_exporter = OTLPMetricExporter(
         endpoint=f"{otlp_endpoint}/metrics",
@@ -136,17 +133,29 @@ def setup_logging():
     """Configure OpenTelemetry logging integration."""
     LoggingInstrumentor().instrument(set_logging_format=True)
 
-    # Configure root logger
-    logger = logging.getLogger()
-    logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
 
-    # Increase verbosity for OTLP HTTP exporter and underlying HTTP requests
+    # Configure OTLP log exporter
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
+    otlp_headers = get_otlp_headers("Host Explorer")
+
+    logger_provider = LoggerProvider(resource=get_resource())
+    log_exporter = OTLPLogExporter(
+        endpoint=f"{otlp_endpoint}/logs",
+        headers=otlp_headers,
+    )
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+    set_logger_provider(logger_provider)
+
+    handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+    root_logger.addHandler(handler)
+
     logging.getLogger("opentelemetry.exporter.otlp.proto.http.trace_exporter").setLevel(logging.DEBUG)
     logging.getLogger("urllib3").setLevel(logging.DEBUG)
-    
-    # Ensure trace correlation is working
-    for handler in logger.handlers:
-        handler.setFormatter(logging.Formatter(
+
+    for h in root_logger.handlers:
+        h.setFormatter(logging.Formatter(
             '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "trace_id": "%(otelTraceID)s", "span_id": "%(otelSpanID)s"}',
             datefmt='%Y-%m-%dT%H:%M:%S'
         ))
