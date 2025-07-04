@@ -291,14 +291,14 @@ def setup_observability(app) -> tuple[trace.Tracer, metrics.Meter, dict]:
     Returns:
         Tuple of (tracer, meter, custom_metrics)
     """
+    # Set up logging first so log records have trace context
+    setup_logging()
+
     # Set up tracing
     tracer = setup_tracing()
-    
+
     # Set up metrics
     meter = setup_metrics()
-    
-    # Set up logging
-    setup_logging()
     
     # Instrument the application
     instrument_application(app)
