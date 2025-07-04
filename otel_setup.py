@@ -96,6 +96,12 @@ def get_otlp_headers(package: str) -> dict:
         otlp_headers["Authorization"] = f"Bearer {observe_token}"
 
     otlp_headers["x-observe-target-package"] = package
+
+    masked_headers = {
+        k: ("<masked>" if k.lower() == "authorization" else v)
+        for k, v in otlp_headers.items()
+    }
+    logging.info("OTLP headers for %s: %s", package, masked_headers)
     return otlp_headers
 
 def setup_tracing() -> trace.Tracer:
