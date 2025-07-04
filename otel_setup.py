@@ -1,228 +1,327 @@
 """
-OpenTelemetry setup for the AISDR Slack-bot.
+OpenTelemetry Setup and Configuration
 
-* Tracing  → OTLP/HTTP  → Observe  (+ BatchSpanProcessor)
-* Metrics  → Prometheus (local) + OTLP/HTTP  → Observe
-* Logs     → OTLP/HTTP  → Observe
-* Auto-instrumentation for Flask, requests, threading, logging
-* Helper to create business-level custom metrics
+This module provides comprehensive OpenTelemetry instrumentation setup for the AISDR application.
+It configures tracing, metrics, and logging with minimal code changes to the main application.
 """
-from __future__ import annotations
 
+import os
 import json
 import logging
-import os
-import urllib.parse
-from typing import Optional, Tuple
+from typing import Optional
+from urllib.parse import quote, unquote
 
-from opentelemetry import metrics, trace
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry import trace, metrics
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
-from opentelemetry.instrumentation.flask import FlaskInstrumentor
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.threading import ThreadingInstrumentor
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs._internal.export import BatchLogRecordProcessor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.threading import ThreadingInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.semconv.resource import ResourceAttributes
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs._internal.export import BatchLogRecordProcessor
+from opentelemetry._logs import set_logger_provider
 
-# --------------------------------------------------------------------------- #
-# Global log formatting
-# --------------------------------------------------------------------------- #
-
+# Configure structured logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format=(
-        '{"timestamp":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s",'
-        '"message":"%(message)s","trace_id":"%(otelTraceID)s","span_id":"%(otelSpanID)s"}'
-    ),
-    datefmt="%Y-%m-%dT%H:%M:%S",
+    format='{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "trace_id": "%(otelTraceID)s", "span_id": "%(otelSpanID)s"}',
+    datefmt='%Y-%m-%dT%H:%M:%S'
 )
 
-# --------------------------------------------------------------------------- #
-# Helpers
-# --------------------------------------------------------------------------- #
+def get_resource() -> Resource:
+    """Create OpenTelemetry resource with comprehensive attributes."""
+    return Resource.create({
+        ResourceAttributes.SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "aisdr-bot"),
+        ResourceAttributes.SERVICE_VERSION: os.getenv("OTEL_SERVICE_VERSION", "1.0.0"),
+        ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("OTEL_ENVIRONMENT", "production"),
+        ResourceAttributes.SERVICE_INSTANCE_ID: os.getenv("HOSTNAME", "unknown"),
+        "service.team": "observability",
+        "service.component": "slack-bot"
+    })
 
+def get_otlp_headers(package: str) -> dict:
+    """Parse OTLP headers and ensure correct target package.
 
-def _resource() -> Resource:
-    """Return an OTEL resource populated with common attributes."""
-    return Resource.create(
-        {
-            ResourceAttributes.SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "aisdr-bot"),
-            ResourceAttributes.SERVICE_VERSION: os.getenv("OTEL_SERVICE_VERSION", "1.0.0"),
-            ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv(
-                "OTEL_ENVIRONMENT", "production"
-            ),
-            ResourceAttributes.SERVICE_INSTANCE_ID: os.getenv("HOSTNAME", "unknown"),
-            "service.team": "observability",
-            "service.component": "slack-bot",
-        }
-    )
-
-
-def _encode_header_value(value: str) -> str:
-    """Return a spec-compliant, URL-encoded header value (spaces → %20, : → %3A …)."""
-    return urllib.parse.quote(value, safe="")
-
-
-def _build_otlp_headers(package_tag: str) -> dict[str, str]:
+    Supports the following environment variables:
+    - ``OTEL_EXPORTER_OTLP_HEADERS`` as a JSON object (existing behaviour)
+    - ``OTEL_EXPORTER_OTLP_AUTH_HEADER`` as ``key=value`` where the value may
+      be unencoded. The value is URL encoded automatically for the exporter.
     """
-    Construct the headers dict for OTLP exporters.
 
-    Precedence:
-    1. OTEL_EXPORTER_OTLP_HEADERS (JSON string, values may already be encoded)
-    2. OTEL_EXPORTER_OTLP_AUTH_HEADER (single key=value, will be encoded if needed)
-    3. OBSERVE_INGEST_TOKEN (plain Bearer token, always encoded here)
-    """
-    headers: dict[str, str] = {}
+    otlp_headers: dict = {}
 
-    # 1. Generic JSON headers
-    if raw := os.getenv("OTEL_EXPORTER_OTLP_HEADERS"):
+    headers_json = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
+    if headers_json:
         try:
-            headers.update(json.loads(raw))
-        except json.JSONDecodeError as exc:
-            logging.warning("Invalid OTEL_EXPORTER_OTLP_HEADERS JSON: %s", exc)
+            otlp_headers.update(json.loads(headers_json))
+        except json.JSONDecodeError as e:
+            logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
 
-    # 2. Single auth header
-    if kv := os.getenv("OTEL_EXPORTER_OTLP_AUTH_HEADER"):
-        if "=" in kv:
-            k, v = kv.split("=", 1)
-            headers[k.strip().title()] = urllib.parse.unquote(v.strip())
+    auth_header = os.getenv("OTEL_EXPORTER_OTLP_AUTH_HEADER")
+    if auth_header:
+        if "=" in auth_header:
+            key, value = auth_header.split("=", 1)
+            key = key.strip().title()
+            value = value.strip()
+            if "%" in value:
+                value = unquote(value)
+            otlp_headers[key] = value
+
+            # Expose encoded form for other tools expecting OTEL spec format
+            os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"{key}={quote(value, safe='')}"
         else:
             logging.warning(
-                "OTEL_EXPORTER_OTLP_AUTH_HEADER expected 'key=value', got %s", kv
+                "Invalid OTEL_EXPORTER_OTLP_AUTH_HEADER format, expected 'key=value'"
             )
 
-    # 3. Observe token shortcut
-    if token := os.getenv("OBSERVE_INGEST_TOKEN"):
-        headers["Authorization"] = f"Bearer {token}"
+    if not otlp_headers:
+        otlp_headers = {"Authorization": "Bearer <YOUR_INGEST_TOKEN>"}
 
-    # ---- URL-encode every value NOW so Observe accepts it ----
-    encoded = {k: _encode_header_value(v) for k, v in headers.items()}
+    observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
+    if observe_token:
+        otlp_headers["Authorization"] = f"Bearer {observe_token}"
 
-    # Expose encoded form via the spec var (helps auto-instrument CLI users)
-    os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = ",".join(f"{k}={v}" for k, v in encoded.items())
+    otlp_headers["x-observe-target-package"] = package
+    return otlp_headers
 
-    # Tag every request so Observe routes it to the right “package”
-    encoded["x-observe-target-package"] = package_tag
-    return encoded
-
-
-def _endpoint() -> str:
-    return os.getenv(
-        "OTEL_EXPORTER_OTLP_ENDPOINT",
-        "https://191369360817.collect.observe-eng.com/v2/otel",
+def setup_tracing() -> trace.Tracer:
+    """Configure OpenTelemetry tracing with OTLP export."""
+    resource = get_resource()
+    
+    # Create tracer provider
+    tracer_provider = TracerProvider(resource=resource)
+    
+    # Configure OTLP exporter
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
+    otlp_headers = get_otlp_headers("Tracing")
+    
+    # Set up OTLP span exporter
+    otlp_exporter = OTLPSpanExporter(
+        endpoint=f"{otlp_endpoint}/traces",
+        headers=otlp_headers
     )
-
-
-# --------------------------------------------------------------------------- #
-# Tracing / Metrics / Logging setup
-# --------------------------------------------------------------------------- #
-
-
-def _setup_tracing() -> trace.Tracer:
-    tp = TracerProvider(resource=_resource())
-    span_exporter = OTLPSpanExporter(
-        endpoint=f"{_endpoint()}/traces", headers=_build_otlp_headers("Tracing")
-    )
-    tp.add_span_processor(BatchSpanProcessor(span_exporter))
-    trace.set_tracer_provider(tp)
+    
+    # Add batch span processor
+    tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+    
+    # Set global tracer provider
+    trace.set_tracer_provider(tracer_provider)
+    
     return trace.get_tracer(__name__)
 
-
-def _setup_metrics() -> metrics.Meter:
-    readers = [PrometheusMetricReader()]
-
-    metric_exporter = OTLPMetricExporter(
-        endpoint=f"{_endpoint()}/metrics",
-        headers=_build_otlp_headers("Metrics"),
+def setup_metrics() -> metrics.Meter:
+    """Configure OpenTelemetry metrics with Prometheus and OTLP export."""
+    resource = get_resource()
+    
+    # Set up metric readers
+    readers = []
+    
+    # Prometheus reader for local metrics
+    prometheus_reader = PrometheusMetricReader()
+    readers.append(prometheus_reader)
+    
+    # OTLP reader for remote metrics
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
+    otlp_headers = get_otlp_headers("Metrics")
+    
+    otlp_metric_exporter = OTLPMetricExporter(
+        endpoint=f"{otlp_endpoint}/metrics",
+        headers=otlp_headers
     )
-    readers.append(
-        PeriodicExportingMetricReader(exporter=metric_exporter, export_interval_millis=5000)
+    
+    otlp_reader = PeriodicExportingMetricReader(
+        exporter=otlp_metric_exporter,
+        export_interval_millis=5000
     )
-
-    mp = MeterProvider(resource=_resource(), metric_readers=readers)
-    metrics.set_meter_provider(mp)
+    readers.append(otlp_reader)
+    
+    # Create meter provider
+    meter_provider = MeterProvider(
+        resource=resource,
+        metric_readers=readers
+    )
+    
+    # Set global meter provider
+    metrics.set_meter_provider(meter_provider)
+    
     return metrics.get_meter(__name__)
 
-
-def _setup_logging() -> None:
+def setup_logging():
+    """Configure OpenTelemetry logging integration."""
     LoggingInstrumentor().instrument(set_logging_format=True)
 
-    lp = LoggerProvider(resource=_resource())
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+
+    # Configure OTLP log exporter
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
+    otlp_headers = get_otlp_headers("Host Explorer")
+
+    logger_provider = LoggerProvider(resource=get_resource())
     log_exporter = OTLPLogExporter(
-        endpoint=f"{_endpoint()}/logs",
-        headers=_build_otlp_headers("Host Explorer"),
+        endpoint=f"{otlp_endpoint}/logs",
+        headers=otlp_headers,
     )
-    lp.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
-    set_logger_provider(lp)
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+    set_logger_provider(logger_provider)
 
-    root = logging.getLogger()
-    root.addHandler(LoggingHandler(level=logging.NOTSET, logger_provider=lp))
-    root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+    handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+    root_logger.addHandler(handler)
 
+    logging.getLogger("opentelemetry.exporter.otlp.proto.http.trace_exporter").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3").setLevel(logging.DEBUG)
 
-# --------------------------------------------------------------------------- #
-# Public API called from aisdr.py
-# --------------------------------------------------------------------------- #
+    for h in root_logger.handlers:
+        h.setFormatter(logging.Formatter(
+            '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "trace_id": "%(otelTraceID)s", "span_id": "%(otelSpanID)s"}',
+            datefmt='%Y-%m-%dT%H:%M:%S'
+        ))
 
-_tracer: Optional[trace.Tracer] = None
-_meter: Optional[metrics.Meter] = None
-_custom_metrics: Optional[dict] = None
-
-
-def setup_observability(app) -> Tuple[trace.Tracer, metrics.Meter, dict]:
-    """Bootstrap OTEL and auto-instrument the Flask app."""
-    global _tracer, _meter, _custom_metrics
-
-    _tracer = _setup_tracing()
-    _meter = _setup_metrics()
-    _setup_logging()
-
-    # Auto-instrument libraries
+def instrument_application(app):
+    """Instrument Flask application with OpenTelemetry auto-instrumentation."""
+    # Instrument Flask
     FlaskInstrumentor().instrument_app(app)
+    
+    # Instrument requests library (for OpenAI and Slack API calls)
     RequestsInstrumentor().instrument()
+    
+    # Instrument threading (for background processing)
     ThreadingInstrumentor().instrument()
-    logging.info("OpenTelemetry initialisation complete")
+    
+    logging.info("Application instrumented with OpenTelemetry")
 
-    _custom_metrics = _define_custom_metrics(_meter)
-    return _tracer, _meter, _custom_metrics
-
-
-def _define_custom_metrics(meter: metrics.Meter) -> dict:
-    """Business-level counters & histograms."""
+def create_custom_metrics(meter: metrics.Meter) -> dict:
+    """Create custom business metrics for the AISDR application."""
+    
+    # Request counters
+    slack_events_counter = meter.create_counter(
+        name="aisdr_slack_events_total",
+        description="Total number of Slack events processed",
+        unit="1"
+    )
+    
+    slack_slash_commands_counter = meter.create_counter(
+        name="aisdr_slash_commands_total", 
+        description="Total number of slash commands processed",
+        unit="1"
+    )
+    
+    # OpenAI API metrics
+    openai_requests_counter = meter.create_counter(
+        name="aisdr_openai_requests_total",
+        description="Total number of OpenAI API requests",
+        unit="1"
+    )
+    
+    openai_request_duration = meter.create_histogram(
+        name="aisdr_openai_request_duration_seconds",
+        description="Duration of OpenAI API requests",
+        unit="s"
+    )
+    
+    # Slack API metrics
+    slack_messages_counter = meter.create_counter(
+        name="aisdr_slack_messages_sent_total",
+        description="Total number of messages sent to Slack",
+        unit="1"
+    )
+    
+    # Email generation metrics
+    emails_generated_counter = meter.create_counter(
+        name="aisdr_emails_generated_total",
+        description="Total number of emails successfully generated",
+        unit="1"
+    )
+    
+    processing_errors_counter = meter.create_counter(
+        name="aisdr_processing_errors_total",
+        description="Total number of processing errors",
+        unit="1"
+    )
+    
+    # Background task metrics
+    background_tasks_counter = meter.create_counter(
+        name="aisdr_background_tasks_total",
+        description="Total number of background tasks started",
+        unit="1"
+    )
+    
+    background_task_duration = meter.create_histogram(
+        name="aisdr_background_task_duration_seconds",
+        description="Duration of background task processing",
+        unit="s"
+    )
+    
     return {
-        "slack_events_total": meter.create_counter(
-            "aisdr_slack_events_total", description="Slack events processed"
-        ),
-        "emails_generated_total": meter.create_counter(
-            "aisdr_emails_generated_total", description="Cold emails generated"
-        ),
-        "openai_latency_seconds": meter.create_histogram(
-            "aisdr_openai_request_duration_seconds", unit="s"
-        ),
+        "slack_events_counter": slack_events_counter,
+        "slack_slash_commands_counter": slack_slash_commands_counter,
+        "openai_requests_counter": openai_requests_counter,
+        "openai_request_duration": openai_request_duration,
+        "slack_messages_counter": slack_messages_counter,
+        "emails_generated_counter": emails_generated_counter,
+        "processing_errors_counter": processing_errors_counter,
+        "background_tasks_counter": background_tasks_counter,
+        "background_task_duration": background_task_duration
     }
 
+def setup_observability(app) -> tuple[trace.Tracer, metrics.Meter, dict]:
+    """
+    Complete OpenTelemetry setup for the AISDR application.
+    
+    Returns:
+        Tuple of (tracer, meter, custom_metrics)
+    """
+    # Set up tracing
+    tracer = setup_tracing()
+    
+    # Set up metrics
+    meter = setup_metrics()
+    
+    # Set up logging
+    setup_logging()
+    
+    # Instrument the application
+    instrument_application(app)
+    
+    # Create custom metrics
+    custom_metrics = create_custom_metrics(meter)
+    
+    logging.info("OpenTelemetry observability setup complete")
+    
+    return tracer, meter, custom_metrics
 
-# Convenience getters --------------------------------------------------------
+# Global variables for instrumentation
+tracer: Optional[trace.Tracer] = None
+meter: Optional[metrics.Meter] = None
+custom_metrics: Optional[dict] = None
 
+def get_tracer() -> trace.Tracer:
+    """Get the global tracer instance."""
+    global tracer
+    if tracer is None:
+        tracer = trace.get_tracer(__name__)
+    return tracer
 
-def get_tracer() -> trace.Tracer:  # noqa: D401
-    return _tracer if _tracer else trace.get_tracer(__name__)
+def get_meter() -> metrics.Meter:
+    """Get the global meter instance."""
+    global meter
+    if meter is None:
+        meter = metrics.get_meter(__name__)
+    return meter
 
-
-def get_meter() -> metrics.Meter:  # noqa: D401
-    return _meter if _meter else metrics.get_meter(__name__)
-
-
-def get_custom_metrics() -> dict:  # noqa: D401
-    return _custom_metrics or {}
+def get_custom_metrics() -> dict:
+    """Get the custom metrics dictionary."""
+    global custom_metrics
+    if custom_metrics is None:
+        custom_metrics = {}
+    return custom_metrics
