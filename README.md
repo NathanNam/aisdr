@@ -51,6 +51,11 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
 # For Observe.inc integration
 export OBSERVE_INGEST_TOKEN=<your_observe_ingest_token>
+
+# When set, `OBSERVE_INGEST_TOKEN` replaces any token defined via
+# `OTEL_EXPORTER_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_AUTH_HEADER`. Make sure
+# this token grants access to Tracing, Metrics and Logs, or unset it if you want
+# to rely solely on `OTEL_EXPORTER_OTLP_AUTH_HEADER`.
 ```
 
 The application automatically sets the `x-observe-target-package` header for each

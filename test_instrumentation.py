@@ -57,6 +57,7 @@ def test_environment():
         "OTEL_SERVICE_NAME",
         "OTEL_ENVIRONMENT",
         "OTEL_EXPORTER_OTLP_HEADERS",
+        "OTEL_EXPORTER_OTLP_AUTH_HEADER",
     ]
     
     print("\n🔧 Environment Variables:")
