@@ -9,6 +9,7 @@ import os
 import json
 import logging
 from typing import Optional
+from urllib.parse import quote, unquote
 
 from opentelemetry import trace, metrics
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -49,16 +50,42 @@ def get_resource() -> Resource:
     })
 
 def get_otlp_headers(package: str) -> dict:
-    """Parse OTLP headers and ensure correct target package."""
-    headers_json = os.getenv(
-        "OTEL_EXPORTER_OTLP_HEADERS",
-        '{"Authorization":"Bearer <YOUR_INGEST_TOKEN>"}'
-    )
-    try:
-        otlp_headers = json.loads(headers_json)
-    except json.JSONDecodeError as e:
-        logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
-        otlp_headers = {}
+    """Parse OTLP headers and ensure correct target package.
+
+    Supports the following environment variables:
+    - ``OTEL_EXPORTER_OTLP_HEADERS`` as a JSON object (existing behaviour)
+    - ``OTEL_EXPORTER_OTLP_AUTH_HEADER`` as ``key=value`` where the value may
+      be unencoded. The value is URL encoded automatically for the exporter.
+    """
+
+    otlp_headers: dict = {}
+
+    headers_json = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
+    if headers_json:
+        try:
+            otlp_headers.update(json.loads(headers_json))
+        except json.JSONDecodeError as e:
+            logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
+
+    auth_header = os.getenv("OTEL_EXPORTER_OTLP_AUTH_HEADER")
+    if auth_header:
+        if "=" in auth_header:
+            key, value = auth_header.split("=", 1)
+            key = key.strip().title()
+            value = value.strip()
+            if "%" in value:
+                value = unquote(value)
+            otlp_headers[key] = value
+
+            # Expose encoded form for other tools expecting OTEL spec format
+            os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"{key}={quote(value, safe='')}"
+        else:
+            logging.warning(
+                "Invalid OTEL_EXPORTER_OTLP_AUTH_HEADER format, expected 'key=value'"
+            )
+
+    if not otlp_headers:
+        otlp_headers = {"Authorization": "Bearer <YOUR_INGEST_TOKEN>"}
 
     observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
     if observe_token:
