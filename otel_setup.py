@@ -60,12 +60,27 @@ def get_otlp_headers(package: str) -> dict:
 
     otlp_headers: dict = {}
 
-    headers_json = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
-    if headers_json:
+    headers_value = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
+    if headers_value is not None:
+        headers_value = headers_value.strip()
+
+    if headers_value:
+        parsed = False
         try:
-            otlp_headers.update(json.loads(headers_json))
-        except json.JSONDecodeError as e:
-            logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {e}")
+            otlp_headers.update(json.loads(headers_value))
+            parsed = True
+        except json.JSONDecodeError:
+            pass
+
+        if not parsed:
+            for pair in headers_value.split(','):
+                if '=' in pair:
+                    key, value = pair.split('=', 1)
+                    otlp_headers[key.strip().title()] = unquote(value.strip())
+                    parsed = True
+
+        if not parsed:
+            logging.warning(f"Invalid OTEL_EXPORTER_OTLP_HEADERS: {headers_value}")
 
     auth_header = os.getenv("OTEL_EXPORTER_OTLP_AUTH_HEADER")
     if auth_header:
