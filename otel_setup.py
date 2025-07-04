@@ -114,10 +114,21 @@ def setup_tracing() -> trace.Tracer:
     # Configure OTLP exporter
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v2/otel")
     otlp_headers = get_otlp_headers("Tracing")
-    
+
+    otlp_url = f"{otlp_endpoint}/v1/traces"
+    masked_headers = {
+        k: ("<masked>" if k.lower() == "authorization" else v)
+        for k, v in otlp_headers.items()
+    }
+    logging.info(
+        "OTLP trace exporter configured with url %s and headers %s",
+        otlp_url,
+        masked_headers,
+    )
+
     # Set up OTLP span exporter
     otlp_exporter = OTLPSpanExporter(
-        endpoint=f"{otlp_endpoint}/v1/traces",
+        endpoint=otlp_url,
         headers=otlp_headers
     )
     
@@ -143,9 +154,20 @@ def setup_metrics() -> metrics.Meter:
     # OTLP reader for remote metrics
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v2/otel")
     otlp_headers = get_otlp_headers("Metrics")
-    
+
+    otlp_url = f"{otlp_endpoint}/v1/metrics"
+    masked_headers = {
+        k: ("<masked>" if k.lower() == "authorization" else v)
+        for k, v in otlp_headers.items()
+    }
+    logging.info(
+        "OTLP metric exporter configured with url %s and headers %s",
+        otlp_url,
+        masked_headers,
+    )
+
     otlp_metric_exporter = OTLPMetricExporter(
-        endpoint=f"{otlp_endpoint}/v1/metrics",
+        endpoint=otlp_url,
         headers=otlp_headers
     )
     
@@ -177,9 +199,20 @@ def setup_logging():
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v2/otel")
     otlp_headers = get_otlp_headers("Host Explorer")
 
+    otlp_url = f"{otlp_endpoint}/v1/logs"
+    masked_headers = {
+        k: ("<masked>" if k.lower() == "authorization" else v)
+        for k, v in otlp_headers.items()
+    }
+    logging.info(
+        "OTLP log exporter configured with url %s and headers %s",
+        otlp_url,
+        masked_headers,
+    )
+
     logger_provider = LoggerProvider(resource=get_resource())
     log_exporter = OTLPLogExporter(
-        endpoint=f"{otlp_endpoint}/v1/logs",
+        endpoint=otlp_url,
         headers=otlp_headers,
     )
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
