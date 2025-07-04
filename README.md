@@ -67,6 +67,9 @@ signal:
 
 So you only need to provide the `Authorization` token using either
 `OTEL_EXPORTER_OTLP_HEADERS` or `OTEL_EXPORTER_OTLP_AUTH_HEADER`.
+
+For troubleshooting, AISDR logs the OTLP headers it builds at startup,
+including the value of `x-observe-target-package` for each signal.
 ```
 
 Copy `.env.example` to `.env` and configure your values:
