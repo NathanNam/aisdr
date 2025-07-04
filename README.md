@@ -43,12 +43,23 @@ export OTEL_SERVICE_NAME=aisdr-bot
 export OTEL_SERVICE_VERSION=1.0.0
 export OTEL_ENVIRONMENT=production
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.observe.inc/v1/otel
-export OTEL_EXPORTER_OTLP_HEADERS='{"Authorization":"Bearer <YOUR_INGEST_TOKEN>","x-observe-target-package":"Tracing"}'
+export OTEL_EXPORTER_OTLP_HEADERS='{"Authorization":"Bearer <YOUR_INGEST_TOKEN>"}'
 export OTEL_TRACES_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
 # For Observe.inc integration
 export OBSERVE_INGEST_TOKEN=<your_observe_ingest_token>
+```
+
+The application automatically sets the `x-observe-target-package` header for each
+signal:
+
+- Traces: `Tracing`
+- Metrics: `Metrics`
+- Logs: `Host Explorer`
+
+So you only need to provide the `Authorization` token in
+`OTEL_EXPORTER_OTLP_HEADERS`.
 ```
 
 Copy `.env.example` to `.env` and configure your values:
