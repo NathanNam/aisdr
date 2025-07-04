@@ -102,12 +102,12 @@ def setup_tracing() -> trace.Tracer:
     tracer_provider = TracerProvider(resource=resource)
     
     # Configure OTLP exporter
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v2/otel")
     otlp_headers = get_otlp_headers("Tracing")
     
     # Set up OTLP span exporter
     otlp_exporter = OTLPSpanExporter(
-        endpoint=f"{otlp_endpoint}/traces",
+        endpoint=f"{otlp_endpoint}/v1/traces",
         headers=otlp_headers
     )
     
@@ -131,11 +131,11 @@ def setup_metrics() -> metrics.Meter:
     readers.append(prometheus_reader)
     
     # OTLP reader for remote metrics
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v2/otel")
     otlp_headers = get_otlp_headers("Metrics")
     
     otlp_metric_exporter = OTLPMetricExporter(
-        endpoint=f"{otlp_endpoint}/metrics",
+        endpoint=f"{otlp_endpoint}/v1/metrics",
         headers=otlp_headers
     )
     
@@ -164,12 +164,12 @@ def setup_logging():
     root_logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
 
     # Configure OTLP log exporter
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v1/otel")
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://api.observe.inc/v2/otel")
     otlp_headers = get_otlp_headers("Host Explorer")
 
     logger_provider = LoggerProvider(resource=get_resource())
     log_exporter = OTLPLogExporter(
-        endpoint=f"{otlp_endpoint}/logs",
+        endpoint=f"{otlp_endpoint}/v1/logs",
         headers=otlp_headers,
     )
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
