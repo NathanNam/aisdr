@@ -26,8 +26,9 @@ from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.semconv.resource import ResourceAttributes
 
 # Configure structured logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format='{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "trace_id": "%(otelTraceID)s", "span_id": "%(otelSpanID)s"}',
     datefmt='%Y-%m-%dT%H:%M:%S'
 )
@@ -134,10 +135,14 @@ def setup_metrics() -> metrics.Meter:
 def setup_logging():
     """Configure OpenTelemetry logging integration."""
     LoggingInstrumentor().instrument(set_logging_format=True)
-    
+
     # Configure root logger
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+
+    # Increase verbosity for OTLP HTTP exporter and underlying HTTP requests
+    logging.getLogger("opentelemetry.exporter.otlp.proto.http.trace_exporter").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3").setLevel(logging.DEBUG)
     
     # Ensure trace correlation is working
     for handler in logger.handlers:
