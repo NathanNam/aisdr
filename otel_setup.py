@@ -89,6 +89,10 @@ def get_otlp_headers(package: str) -> dict:
 
     observe_token = os.getenv("OBSERVE_INGEST_TOKEN")
     if observe_token:
+        if "Authorization" in otlp_headers and otlp_headers["Authorization"] != f"Bearer {observe_token}":
+            logging.info(
+                "OBSERVE_INGEST_TOKEN overrides Authorization header defined by other variables"
+            )
         otlp_headers["Authorization"] = f"Bearer {observe_token}"
 
     otlp_headers["x-observe-target-package"] = package
